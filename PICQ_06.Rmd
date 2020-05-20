@@ -1,0 +1,127 @@
+---
+title: 'PICQ Indicator ID # 100192'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library("RPostgreSQL")
+
+# loads the PostgreSQL driver
+con <- dbConnect(dbDriver("PostgreSQL"), dbname = 'vaed_full',
+                 host = "himsql7.latrobe.edu.au", port = 5432,
+                 user = "dewollershei-test", password = 'healthGuru' )
+```
+# # 100192 - Dehydration code as principal diagnosis followed by gastroenteritis code
+This indicator identifies records with dehydration as principal diagnosis and a gastroenteritis code. ACS 1120 'Dehydration with gastroenteritis' states that, in an admission for treatment of gastroenteritis and dehydration (and dehydration is documented), gastroenteritis should be principal diagnosis with dehydration as an additional diagnosis. NCCH advised that diarrhoea should be coded in the same way as gastroenteritis in ACS 1120. These records would be correct if the patient was admitted with dehydration due to another condition and subsequently develops gastroenteritis or diarrhoea during the episode of care.
+
+# Interpretation of indicator
+Identify records with dehydration diagnosis code as principal diagnosis and gastroenteritis diagnosis code as additional diagnosis.
+
+# Notes
+Entire indicator implemented. Difficulty level 4/10 as needed to ensure dehydration was in position 1 and gastroenteritis in any position other than 1. Implemented an alternative query to ensure the same number of results were returned when using INTERSECT.
+
+# Codes
+| What                           | Table               | Field     | Code            |
+|--------------------------------|---------------------|-----------|-----------------|
+| Dehydration (volume depletion) | admission_diagnosis | diag_code | E86             |
+| Gastroenteritis                | admission_diagnosis | diag_code | starts with A09 |
+| Principal diagnosis            | admission_diagnosis | position  | 1               |
+| Additional diagnosis           | admission_diagnosis | position  | any except 1    |
+
+# Steps
+1) Admissions WITH dehydration (volume depletion) as principal diagnosis.
+1) Admissions WITH gastroenteritis as additional diagnosis.
+1) FINAL: Admissions WITH dehydration (volume depletion) as principal diagnosis AND gastroenteritis as additional diagnosis.
+1) ALTERNATIVE FINAL: Admissions WITH dehydration (volume depletion) as principal diagnosis AND gastroenteritis as additional diagnosis.
+
+## Admissions WITH dehydration (volume depletion) code as principal diagnosis
+Select admission ID, diagnosis code and position from the admission diagnosis table. Only show records that have the diagnosis code E86 in position 1.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code,
+       position
+FROM   admission_diagnosis
+WHERE  diag_code = 'E86'
+       AND position = 1 
+;
+
+```
+## Admissions WITH gastroenteritis as additional diagnosis
+Select admission ID, diagnosis code and position from the admission diagnosis table. Only show records that have diagnosis codes starting with A09 in positions greater than 1.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code,
+       position
+FROM   admission_diagnosis
+WHERE  diag_code LIKE 'A09%'
+       AND position > 1 
+;
+
+```
+## FINAL: Admissions WITH dehydration (volume depletion) as principal diagnosis AND gastroenteritis as additional diagnosis
+Selection admission ID from the admission diagnosis table. Only show records that have the diagnosis code E86 in position 1 AND diagnosis codes starting with A09 in positions greater than 1.
+```{sql connection=con}
+
+WITH dehydrate
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code = 'E86'
+                AND position = 1),
+     gastro
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code LIKE 'A09%'
+                AND position > 1)
+
+SELECT admission_id
+FROM   dehydrate
+       JOIN gastro USING (admission_id)  
+;
+
+```
+## ALTERNATIVE FINAL: Admissions WITH dehydration (volume depletion) as principal diagnosis AND gastroenteritis as additional diagnosis
+Select admission ID from diagnosis table. Only show records that have the diagnosis code E86 in position 1 AND diagnosis codes starting with A09 in positions greater than 1.
+```{sql connection=con}
+
+WITH dehydrate
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code = 'E86'
+                AND position = 1),
+     gastro
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code LIKE 'A09%'
+                AND position > 1) 
+
+SELECT admission_id
+FROM   dehydrate
+INTERSECT
+SELECT admission_id
+FROM   gastro  
+;
+
+```
+## Examination of single record - 21070113	
+This admission matches the PICQ indicator because it has dehydration (volume depletion) as principal diagnosis and gastroenteritis as an additional diagnosis.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code,
+       position,
+       diag_short_desc
+FROM   admission_diagnosis
+       JOIN diagnosis_desc USING (diag_code)
+WHERE  admission_id = 21070113	
+;
+
+```
+
+

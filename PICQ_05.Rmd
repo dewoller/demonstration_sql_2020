@@ -1,0 +1,195 @@
+---
+title: 'PICQ Indicator ID # 101984'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library("RPostgreSQL")
+
+# loads the PostgreSQL driver
+con <- dbConnect(dbDriver("PostgreSQL"), dbname = 'vaed_full',
+                 host = "himsql7.latrobe.edu.au", port = 5432,
+                 user = "dewollershei-test", password = 'healthGuru' )
+```
+# # 101984 - Dependence, harmful use, current use or personal history of tobacco use codes assigned in combination
+This indicator identifies records containing a dependence, harmful use, current use or personal history of tobacco use code. ACS 0503 'Drug, alcohol and tobacco use disorders' states that, tobacco use may be classified into one of these codes, that is, more than one of these codes should not be assigned in the same episode of care.
+
+# Interpretation of indicator
+Identify records with more than 1 of the following diagnosis codes togther in a single admission: tobacco dependence syndrome, harmful use of tobacco, tobacco use current, and personal history of tobacco use disorder. 
+
+# Notes
+Entire indicator implemented. Difficulty level 10/10 due to challenges with implementing multiple combinations of codes to be returned to ensure that the final result was returning the correct number of records, and also in using an alternative simplified query.
+
+# Codes
+| What                                               | Table               | Field     | Code  |
+|----------------------------------------------------|---------------------|-----------|-------|
+| Tobacco dependence syndrome diagnosis              | admission_diagnosis | diag_code | F172  |
+| Harmful use of tobacco diagnosis                   | admission_diagnosis | diag_code | F171  |
+| Tobacco use current diagnosis                      | admission_diagnosis | diag_code | Z720  |
+| Personal history of tobacco use disorder diagnosis | admission_diagnosis | diag_code | Z8643 |
+
+# Steps
+1) Admissions WITH tobacco dependence syndrome diagnosis.
+1) Admissions WITH harmful use of tobacco diagnosis.
+1) Admissions WITH tobacco use current diagnosis.
+1) Admissions WITH personal history of tobacco use disorder diagnosis.
+1) Admissions WITH ANY of the following diagnosis codes: tobacco dependence syndrome diagnosis, harmful use of tobacco diagnosis, tobacco use current diagnosis, or personal history of tobacco use disorder diagnosis.
+1) Admissions WITH tobacco dependence syndrome diagnosis AND harmful use of tobacco diagnosis OR tobacco use current diagnosis OR personal history of tobacco use disorder diagnosis.
+1) Admissions WITH harmful use of tobacco diagnosis AND tobacco use current diagnosis OR personal history of tobacco use disorder diagnosis.
+1) Admissions WITH tobacco use current diagnosis AND personal history of tobacco use disorder diagnosis.
+1) FINAL: Admissions WITH any of the following diagnosis codes TOGETHER in the same admission: tobacco dependence syndrome diagnosis, harmful use of tobacco diagnosis, tobacco use current diagnosis, or personal history of tobacco use disorder diagnosis.
+1) ALTERNATIVE FINAL: Admissions WITH any of the following diagnosis codes TOGETHER in the same admission: tobacco dependence syndrome diagnosis, harmful use of tobacco diagnosis, tobacco use current diagnosis, or personal history of tobacco use disorder diagnosis.
+
+##  Admissions WITH tobacco dependence syndrome diagnosis 
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code F172.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code = 'F172' 
+;
+
+```
+## Admissions WITH harmful use of tobacco diagnosis
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code F171.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code = 'F171' 
+;
+
+```
+## Admissions WITH tobacco use current diagnosis
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code Z720.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code = 'Z720' 
+;
+
+```
+## Admissions WITH personal history of tobacco use disorder diagnosis
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code Z8643.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code = 'Z8643' 
+;
+
+```
+## Admissions WITH ANY of the following diagnosis codes: tobacco dependence syndrome diagnosis, harmful use of tobacco diagnosis, tobacco use current diagnosis, or personal history of tobacco use disorder diagnosis
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code F172, F171, Z72 or Z8643.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code IN ( 'F172', 'F171', 'Z72', 'Z8643' ) 
+;
+
+```
+## Admissions WITH tobacco dependence syndrome diagnosis AND harmful use of tobacco diagnosis OR tobacco use current diagnosis OR personal history of tobacco use disorder diagnosis
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code F172 and F171, Z720 or Z8643.
+```{sql connection=con}
+
+SELECT admission_id,
+       ad1.diag_code,
+       ad2.diag_code
+FROM   admission_diagnosis ad1
+       JOIN admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code IN ( 'F172' )
+       AND ad2.diag_code IN ( 'F171', 'Z720', 'Z8643' ) 
+;
+
+```
+## Admissions WITH harmful use of tobacco diagnosis AND tobacco use current diagnosis OR personal history of tobacco use disorder diagnosis
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code F171 and Z720 or Z8643.
+```{sql connection=con}
+
+SELECT admission_id,
+       ad1.diag_code,
+       ad2.diag_code
+FROM   admission_diagnosis ad1
+       JOIN admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code IN ( 'F171' )
+       AND ad2.diag_code IN ( 'Z720', 'Z8643' ) 
+;
+
+```
+## Admissions WITH tobacco use current diagnosis AND personal history of tobacco use disorder diagnosis
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code Z720 and Z8643.
+```{sql connection=con}
+
+SELECT admission_id,
+       ad1.diag_code,
+       ad2.diag_code
+FROM   admission_diagnosis ad1
+       JOIN admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code IN ( 'Z720' )
+       AND ad2.diag_code IN ( 'Z8643' ) 
+;
+
+```
+## FINAL: Admissions WITH any of the following diagnosis codes TOGETHER in the same admission: tobacco dependence syndrome diagnosis, harmful use of tobacco diagnosis, tobacco use current diagnosis, or personal history of tobacco use disorder diagnosis
+Selection admission ID and diagnosis code from the admission diagnosis table. Only show records that have any of the following diagnosis codes together in the same admission: F172, F171, Z720 or Z8643. Order the results by admission ID in ascending order.
+
+Note: ORDER BY added onto this query for comparison with the alternative final query to ensure the results returned the same admissions.
+```{sql connection=con}
+
+SELECT admission_id,
+       dc1.diag_code,
+       dc2.diag_code
+FROM   admission_diagnosis dc1
+       JOIN admission_diagnosis dc2 USING (admission_id)
+WHERE  ( dc1.diag_code IN ( 'F172' )
+         AND dc2.diag_code IN ( 'F171', 'Z720', 'Z8643' ) )
+        OR ( dc1.diag_code IN ( 'F171' )
+             AND dc2.diag_code IN ( 'Z720', 'Z8643' ) )
+        OR ( dc1.diag_code IN ( 'Z720' )
+             AND dc2.diag_code IN ( 'Z8643' ) )
+ORDER  BY admission_id ASC  
+;
+
+```
+## ALTERNATIVE FINAL: Admissions WITH any of the following diagnosis codes TOGETHER in the same admission: tobacco dependence syndrome diagnosis, harmful use of tobacco diagnosis, tobacco use current diagnosis, or personal history of tobacco use disorder diagnosis
+Select admission ID and count the unique diagnosis codes from the admission diagnosis table where the diagnosis codes are F171, F172, Z8643 or Z720. Group the results by admission order and only show admissions that have more than or equal to 2 unique diagnosis codes of the ones specified (F171, F172, Z8643, Z720). Order the results by admission ID in ascending order.
+
+Note: This query results the same results as the final query but is more concise. DISTINCT was required to be used to excluded admissions where a diagnosis code assigned twice was included e.g. where Z8643 was assigned twice in the same admission, which is not part of the PICQ indicator criteria.
+```{sql connection=con}
+
+SELECT admission_id,
+       Count (DISTINCT diag_code)
+FROM   admission_diagnosis
+WHERE  diag_code IN ( 'F171', 'F172', 'Z8643', 'Z720' )
+GROUP  BY admission_id
+HAVING Count (DISTINCT diag_code) >= 2
+ORDER  BY admission_id ASC  
+;
+
+```
+## Examination of single record - 21188496
+This admission matches the PICQ indicator because it has diagnosis code for personal history of tobacco use disorder AND a diagnosis code for tobacco use current in the same admission.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code,
+       diag_short_desc
+FROM   admission_diagnosis
+       JOIN diagnosis_desc USING (diag_code)
+WHERE  admission_id = 21188496  
+;
+   
+```
+

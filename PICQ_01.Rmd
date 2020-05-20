@@ -1,0 +1,153 @@
+---
+title: 'PICQ Indicator ID # 101990'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library("RPostgreSQL")
+
+# loads the PostgreSQL driver
+con <- dbConnect(dbDriver("PostgreSQL"), dbname = 'vaed_full',
+                 host = "himsql7.latrobe.edu.au", port = 5432,
+                 user = "dewollershei-test", password = 'healthGuru' )
+```
+# # 101990 - Type 2 diabetes code with intermediate hyperglycaemia code or another form of diabetes code
+This indicator identifies records containing both a Type 2 diabetes code and an intermediate hyperglycaemia code or another form of diabetes code. The Excludes notes at E09, E10, E11, E13 and E14 preclude the use of a Type 2 diabetes code with an intermediate hyperglycaemia code or another form of diabetes code in one episode of care.
+
+# Interpretation of indicator
+Identify records that have a Type 2 diabetes diagnosis code together with an intermediate hyperglycaemia code or another form of diabetes code (i.e. Type 1 diabetes, other specific forms of diabetes mellitus, or unspecified diabetes mellitus) in the one episode.
+
+# Notes
+Entire indicator implemented. Difficulty level 4/10.
+
+# Codes
+| What                                       | Table               | Field     | Code            |
+|--------------------------------------------|---------------------|-----------|-----------------|
+| Type 2 diabetes diagnosis                  | admission_diagnosis | diag_code | starts with E11 |
+| Intermediate diabetes diagnosis            | admission_diagnosis | diag_code | starts with E09 |
+| Type 1 diabetes diagnosis                  | admission_diagnosis | diag_code | starts with E10 |
+| Other specific forms of diabetes diagnosis | admission_diagnosis | diag_code | starts with E13 |
+| Unspecified diabetes diagnosis             | admission_diagnosis | diag_code | starts with E14 |
+
+# Steps
+1) Admissions WITH Type 2 diabetes diagnosis AND intermediate diabetes diagnosis.
+1) Admissions WITH Type 2 diabetes diagnosis AND type 1 diabetes diagnosis.
+1) Admissions WITH Type 2 diabetes diagnosis AND other specified forms of diabetes diagnosis.
+1) Admissions WITH Type 2 diabetes diagnosis AND unspecified diabetes diagnosis.
+1) FINAL: Admissions WITH Type 2 diabetes diagnosis AND intermediate diabetes OR Type 1 diabetes OR other specific forms of diabetes OR unspecified diabetes.
+1) FINAL ALTERNATIVE: Admissions WITH Type 2 diabetes diagnosis AND intermediate diabetes OR Type 1 diabetes OR other specific forms of diabetes OR unspecified diabetes.
+
+## Admissions WITH Type 2 diabetes diagnosis AND intermediate diabetes diagnosis.
+Selection admission ID and diagnosis code from the admission diagnosis table. Only show records where the diagnosis codes start with E11 and E09 in the same admission.
+```{sql connection=con}
+
+SELECT admission_id,
+       ad1.diag_code,
+       ad2.diag_code
+FROM   admission_diagnosis ad1
+       JOIN admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code LIKE 'E11%'
+       AND ad2.diag_code LIKE 'E09%' 
+;
+
+```
+## Admissions WITH Type 2 diabetes diagnosis AND type 1 diabetes diagnosis.
+Selection admission ID and diagnosis code from the admission diagnosis table. Only show records where the diagnosis codes start with E11 and E10 in the same admission.
+```{sql connection=con}
+
+SELECT admission_id,
+       ad1.diag_code,
+       ad2.diag_code
+FROM   admission_diagnosis ad1
+       JOIN admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code LIKE 'E11%'
+       AND ad2.diag_code LIKE 'E10%' 
+;
+
+```
+## Admissions WITH Type 2 diabetes diagnosis AND other specified forms of diabetes diagnosis.
+Selection admission ID and diagnosis code from the admission diagnosis table. Only show records where the diagnosis codes start with E11 and E13 in the same admission.
+```{sql connection=con}
+
+SELECT admission_id,
+       ad1.diag_code,
+       ad2.diag_code
+FROM   admission_diagnosis ad1
+       JOIN admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code LIKE 'E11%'
+       AND ad2.diag_code LIKE 'E13%' 
+;
+
+```
+## Admissions WITH Type 2 diabetes diagnosis AND unspecified diabetes diagnosis.
+Selection admission ID and diagnosis code from the admission diagnosis table. Only show records where the diagnosis codes start with E11 and E14 in the same admission.
+```{sql connection=con}
+
+SELECT admission_id,
+       ad1.diag_code,
+       ad2.diag_code
+FROM   admission_diagnosis ad1
+       JOIN admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code LIKE 'E11%'
+       AND ad2.diag_code LIKE 'E14%' 
+;
+
+```
+## FINAL: Admissions WITH Type 2 diabetes diagnosis AND intermediate diabetes OR Type 1 diabetes OR other specific forms of diabetes OR unspecified diabetes
+Selection admission ID and diagnosis code from the admission diagnosis table. Only show records where the diagnosis codes start with E11 and E09, E10, E13 or E14 in the same admission.
+
+Note: This final query returns the same number of results as the individual queries in steps 1 to 4. 
+```{sql connection=con}
+
+SELECT admission_id,
+       ad1.diag_code,
+       ad2.diag_code
+FROM   admission_diagnosis ad1
+JOIN   admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code LIKE 'E11%'
+AND
+       (
+              SELECT ad2.diag_code LIKE 'E09%'
+              OR     ad2.diag_code LIKE 'E10%'
+              OR     ad2.diag_code LIKE 'E13%'
+              OR     ad2.diag_code LIKE 'E14%')
+;
+
+```
+## FINAL ALTERNATIVE: Admissions WITH Type 2 diabetes diagnosis AND intermediate diabetes OR Type 1 diabetes OR other specific forms of diabetes OR unspecified diabetes
+Selection admission ID and diagnosis code from the admission diagnosis table. Only show records where the diagnosis codes start with E11 and E09, E10, E13 or E14 in the same admission.
+
+Note: Alternative solution of final query using SIMILAR TO to simplify the query.
+```{sql connection=con}
+
+SELECT admission_id,
+       ad1.diag_code,
+       ad2.diag_code
+FROM   admission_diagnosis ad1
+JOIN   admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code LIKE 'E11%'
+AND
+       (
+              SELECT ad2.diag_code LIKE 'E09%'
+              OR     ad2.diag_code SIMILAR TO 'E1[034]%')
+;
+
+```
+## Examination of single record - 21909987
+This admission matches the PICQ indicator because it has a Type 1 diabetes diagnosis code with a Type 2 diabetes diagnosis code in the same admission/episode.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code,
+       diag_desc
+FROM   admission_diagnosis
+       JOIN diagnosis_desc USING (diag_code)
+WHERE  admission_id = 21909987 
+;
+
+```

@@ -1,0 +1,206 @@
+---
+title: 'PICQ Indicator ID # 100076'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library("RPostgreSQL")
+
+# loads the PostgreSQL driver
+con <- dbConnect(dbDriver("PostgreSQL"), dbname = 'vaed_full',
+                 host = "himsql7.latrobe.edu.au", port = 5432,
+                 user = "dewollershei-test", password = 'healthGuru' )
+```
+# 100076 - DKA (ketoacidosis) with other than Type 1 diabetes mellitus or long term use of insulin
+This indicator identifies records where the diabetes code is other than Type 1 diabetes mellitus but DKA is indicated and there is no personal history of long term (current) use of insulin code. Diabetes mellitus with ketoacidosis (DKA) is usually seen only in patients who are reliant on insulin for survival, or diabetic patients with severe sepsis or infection. These records would be correct if the diabetic patient has DKA, is not Type 1 diabetes mellitus nor has a personal history of long term insulin use, but has a severe sepsis or infection code.
+
+# Interpretation of indicator
+Identify records that have DKA (ketoacidosis) diagnosis code, except records that have a Type 1 diabetes mellitus code or long term use of insulin diagnosis code.
+ADDITIONAL: To further identify if these records are incorrect, also identify if these records have a severe sepsis or infection code.
+
+# Notes
+Entire indicator implemented. Difficulty 4/10 due to multiple OR combinations and attempts to simplify query. Difficulty 6/10 to further identify if the records were incorrect.
+
+# Codes
+| What                               | Table               | Field     | Code                                          |
+|------------------------------------|---------------------|-----------|-----------------------------------------------|
+| DKA (ketoacidosis) diagnosis       | admission_diagnosis | diag_code | starts with E1 and ends with 11, 12, 15 or 16 |
+| Type 1 diabetes mellitus diagnosis | admission_diagnosis | diag_code | starts with E10                               |
+| Long term use of insulin diagnosis | admission_diagnosis | diag_code | Z9222                                         |
+| Severe sepsis diagnosis            | admission_diagnosis | diag_code | R651                                          |
+| Infection diagnosis                | admission_diagnosis | diag_code | A00 to B99                                    |
+
+# Steps
+1) Admissions WITH DKA (ketoacidosis) diagnosis.
+1) ALTERNATIVE: Admissions WITH DKA (ketoacidosis) diagnosis
+1) Admissions WITHOUT Type 1 diabetes mellitus diagnosis.
+1) Admissions WITHOUT long term use of insulin diagnosis.
+1) FINAL: Admissions WITH DKA (ketoacidosis) diagnosis WITHOUT Type 1 diabetes mellitus diagnosis OR long term use of insulin diagnosis.
+1) ADDITIONAL: Admissions WTIHOUT severe sepsis diagnosis OR infection diagnosis.
+1) ADDITIONAL FINAL: Admissions WITH DKA (ketoacidosis) diagnosis WITHOUT Type 1 diabetes mellitus OR long term use of insulin diagnosis AND WITHOUT severe sepsis diagnosis OR infection diagnosis code.
+
+## Admissions WITH DKA (ketoacidosis) diagnosis
+Selection admission ID and diagnosis code. Only show records with diagnosis codes starting with E1 and ending with 11, 12, 15 or 16.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code LIKE 'E1%11'
+        OR diag_code LIKE 'E1%12'
+        OR diag_code LIKE 'E1%15'
+        OR diag_code LIKE 'E1%16' 
+;
+
+```
+## ALTERNATIVE: Admissions WITH DKA (ketoacidosis) diagnosis
+Selection admission ID and diagnosis code. Only show records with diagnosis codes starting with E1 and ending with 11, 12, 15 or 16.
+
+Note: Alternative query for step 1 using SIMILAR TO to simply.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code SIMILAR TO 'E1%1[1256]'
+;
+
+```
+## Admissions WITHOUT Type 1 diabetes mellitus diagnosis
+Select admission ID and diagnosis code. Only show records without diagnosis codes starting with E10.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+EXCEPT
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code LIKE 'E10%' 
+;
+
+```
+## Admissions WITHOUT long term use of insulin diagnosis
+Select admission ID and diagnosis code. Only show records without diagnosis code Z9222.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+EXCEPT
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code LIKE 'Z9222' 
+;
+
+```
+## FINAL: Admissions WITH DKA (ketoacidosis) diagnosis WITHOUT Type 1 diabetes mellitus diagnosis OR long term use of insulin diagnosis
+Selection admission ID and diagnosis code. Only show records with diagnosis codes starting with E1 and ending with 11, 12, 15 or 16. Exclude records with diagnosis codes starting with E10 or diagnosis codes Z9222.
+```{sql connection=con}
+
+ WITH dka AS
+(
+       SELECT admission_id,
+              diag_code
+       FROM   admission_diagnosis
+       WHERE  diag_code SIMILAR TO 'E1%1[1256]'), 
+      t1dm AS
+(
+       SELECT admission_id,
+              diag_code
+       FROM   admission_diagnosis
+       WHERE  diag_code LIKE 'E10%'), 
+     insulin AS
+(
+       SELECT admission_id,
+              diag_code
+       FROM   admission_diagnosis
+       WHERE  diag_code LIKE 'Z9222')
+       
+SELECT admission_id
+FROM   dka
+EXCEPT
+SELECT admission_id
+FROM   t1dm
+EXCEPT
+SELECT admission_id
+FROM   insulin 
+;
+
+```
+## ADDITIONAL: Admissions WTIHOUT severe sepsis diagnosis OR infection diagnosis
+Selection admission ID and diagnosis code from the admission diagnosis table. Exclude records with the diagnosis code R651 or diagnosis codes A00 to B99.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+EXCEPT
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code = 'R651'
+        OR diag_code BETWEEN 'A00' AND 'B99' 
+;
+
+```
+## ADDITIONAL FINAL: Admissions WITH DKA (ketoacidosis) diagnosis WITHOUT Type 1 diabetes mellitus OR long term use of insulin diagnosis AND WITHOUT severe sepsis diagnosis OR infection diagnosis code.
+Selection admission ID and diagnosis code from the admission diagnosis table. Only show records with diagnosis codes starting with E1 and ending with 11, 12, 15 or 16. Exclude records with diagnosis codes starting with E10 or diagnosis codes Z9222. Further exclude records with diagnosis codes R651 or diagnosis codes starting with A00 to B99.
+```{sql connection=con}
+
+WITH dka
+     AS (SELECT admission_id,
+                diag_code
+         FROM   admission_diagnosis
+         WHERE  diag_code SIMILAR TO 'E1%1[1256]'),
+     t1dm
+     AS (SELECT admission_id,
+                diag_code
+         FROM   admission_diagnosis
+         WHERE  diag_code LIKE 'E10%'),
+     insulin
+     AS (SELECT admission_id,
+                diag_code
+         FROM   admission_diagnosis
+         WHERE  diag_code LIKE 'Z9222'),
+     sepsis_infect
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code = 'R651'
+                 OR diag_code BETWEEN 'A00' AND 'B99') 
+
+SELECT admission_id
+FROM   dka
+EXCEPT
+SELECT admission_id
+FROM   t1dm
+EXCEPT
+SELECT admission_id
+FROM   insulin
+EXCEPT
+SELECT admission_id
+FROM   sepsis_infect 
+;
+
+```
+## Examination of single record - 22249611	
+This admission matches the PICQ indicator because it has a DKA (ketoacidosis) diagnosis code without a Type 1 diabetes mellitus code or long term use of insulin diagnosis code. This admission is also incorrect as it does not have a severe sepsis diagnosis or infection diagnosis code.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code,
+       position,
+       diag_short_desc
+FROM   admission_diagnosis
+       JOIN diagnosis_desc USING (diag_code)
+WHERE  admission_id = 22249611	
+;
+
+```

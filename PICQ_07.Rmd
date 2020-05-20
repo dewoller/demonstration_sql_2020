@@ -1,0 +1,212 @@
+---
+title: 'PICQ Indicator ID # 100854'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library("RPostgreSQL")
+
+# loads the PostgreSQL driver
+con <- dbConnect(dbDriver("PostgreSQL"), dbname = 'vaed_full',
+                 host = "himsql7.latrobe.edu.au", port = 5432,
+                 user = "dewollershei-test", password = 'healthGuru' )
+```
+# # 100854 - Abortion, threatened abortion, threatened premature labour or pre-term delivery code without duration of pregnancy code.
+This indicator identifies records containing an abortion, threatened abortion, threatened premature labour or pre-term delivery code, but no duration of pregnancy code. The Note at O09 Duration of pregnancy in the Tabular List instructs in the assignment of the duration of pregnancy codes. 
+
+# Interpretation of indicator
+Identify records with abortion, threatened abortion, threatened premature labour or pre-term delivery diagnosis codes without a duration of pregnancy diagnosis code.
+
+# Notes
+Entire indicator implemented. Difficulty 8/10 due to a few additional steps required to ensure that the records returned were correct. For example, to check that step 6 (admissions without duration of pregnancy codes) was returning the correct records, I implemented an alternative query, as well as error checking to ensure that the final query was returning the same number of results as the error checking queries (steps 9, 10 and 11).
+
+# Codes
+| What                                  | Table               | Field     | Code                   |
+|---------------------------------------|---------------------|-----------|------------------------|
+| Abortion diagnosis                    | admission_diagnosis | diag_code | starts with O00 to O07 |
+| Threatened abortion diagnosis         | admission_diagnosis | diag_code | O200                   |
+| Threatened premature labour diagnosis | admission_diagnosis | diag_code | O470                   |
+| Pre-term delivery diagnosis           | admission_diagnosis | diag_code | starts with O60        |
+| Duration of pregnancy diagnosis       | admission_diagnosis | diag_code | starts with O09        |
+
+# Steps
+1) Admissions WITH abortion diagnosis code.
+1) Admissions WITH threatened abortion diagnosis code.
+1) Admissions WITH threatened premature labour diagnosis code.
+1) Admissions WITH pre-term delivery diagnosis code.
+1) Admissions WITH abortion diagnosis code OR threatened abortion diagnosis code OR threatened premature labour diagnosis code OR pre-term delivery diagnosis code.
+1) Admissions WITHOUT duration of pregnancy diagnosis code.
+1) ALTERNATIVE: Admissions WITHOUT duration of pregnancy diagnosis code.
+1) FINAL: Admissions WITH abortion diagnosis code OR threatened abortion diagnosis code OR threatened premature labour diagnosis code OR pre-term delivery diagnosis code WITHOUT duration of pregnancy diagnosis code.
+1) ERROR CHECK: Admissions WITH abortion diagnosis WITHOUT duration of pregnancy diagnosis.
+1) ERROR CHECK: Admissions WITH threatened abortion diagnosis OR threatened premature labour diagnosis WITHOUT duration of pregnancy diagnosis.
+1) ERROR CHECK: Admissions WITH pre-term delivery diagnosis WITHOUT duration of pregnancy diagnosis.
+
+## Admissions WITH abortion diagnosis code
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have diagnosis codes starting with O00 to O07.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code BETWEEN 'O00%' AND 'O07%' 
+;
+
+```
+## Admissions WITH threatened abortion diagnosis code
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code O200.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code = 'O200' 
+;
+
+```
+## Admissions WITH threatened premature labour diagnosis code
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code O470.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code = 'O470' 
+;
+
+```
+## Admissions WITH pre-term delivery diagnosis code
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis codes starting with O60.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code LIKE 'O60%' 
+;
+
+```
+## Admissions WITH abortion diagnosis code OR threatened abortion diagnosis code OR threatened premature labour diagnosis code OR preterm delivery diagnosis code.
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis codes starting with O00 to O07, O200, O470 or diagnosis codes starting with O60. Order the records in ascending order. 
+
+Note: Ordering the records in ascending order is to ensure that all the records selected are returned.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code BETWEEN 'O00%' AND 'O07%'
+        OR diag_code IN ( 'O200', 'O470' )
+        OR diag_code LIKE 'O60%'
+ORDER  BY diag_code ASC 
+;
+
+```
+## Admissions WITHOUT duration of pregnancy code diagnosis code
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records where the diagnosis code starts with O09.
+```{sql connection=con}
+
+SELECT admission_id
+FROM   admission_diagnosis
+EXCEPT
+SELECT admission_id
+FROM   admission_diagnosis
+WHERE  diag_code LIKE 'O09%' 
+;
+
+```
+## ALTERNATIVE: Admissions WITHOUT duration of pregnancy diagnosis code
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records where the diagnosis codes do not start with OO9.
+```{sql connection=con}
+
+SELECT DISTINCT admission_id
+FROM   admission_diagnosis
+WHERE  NOT diag_code LIKE 'O09%' 
+;
+
+```
+## FINAL: Admissions WITH abortion diagnosis code OR threatened abortion diagnosis code OR threatened premature labour diagnosis code OR pre-term delivery diagnosis code WITHOUT duration of pregnancy diagnosis code
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have diagnosis codes starting with O00 to O07, O200, O470 or diagnosis codes starting with O60. Exclude records that have diagnosis codes starting with O09.
+```{sql connection=con}
+
+WITH abort_lab_dev
+     AS (SELECT admission_id,
+                diag_code
+         FROM   admission_diagnosis
+         WHERE  diag_code BETWEEN 'O00%' AND 'O07%'
+                 OR diag_code IN ( 'O200', 'O470' )
+                 OR diag_code LIKE 'O60%'),
+     duration
+     AS (SELECT admission_id,
+                diag_code
+         FROM   admission_diagnosis
+         WHERE  diag_code LIKE 'O09%') 
+
+SELECT admission_id
+FROM   abort_lab_dev
+EXCEPT
+SELECT admission_id
+FROM   duration 
+;
+
+```
+## ERROR CHECK: Admissions WITH abortion diagnosis WITHOUT duration of pregnancy diagnosis
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have diagnosis codes starting with O00 to O07. Exclude records with diagnosis codes starting with O09.
+```{sql connection=con}
+
+SELECT admission_id
+FROM   admission_diagnosis
+WHERE  diag_code BETWEEN 'O00%' AND 'O07%'
+EXCEPT
+SELECT admission_id
+FROM   admission_diagnosis
+WHERE  diag_code LIKE 'O09%' 
+;
+
+```
+## ERROR CHECK: Admissions WITH threatened abortion diagnosis OR threatened premature labour diagnosis WITHOUT duration of pregnancy diagnosis
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have diagnosis codes O200 or O470. Exclude records that have diagnosis codes starting with O09.
+```{sql connection=con}
+
+SELECT admission_id
+FROM   admission_diagnosis
+WHERE  diag_code IN ( 'O200', 'O470' )
+EXCEPT
+SELECT admission_id
+FROM   admission_diagnosis
+WHERE  diag_code LIKE 'O09%' 
+;
+
+```
+## ERROR CHECK: Admissions WITH pre-term delivery diagnosis WITHOUT duration of pregnancy diagnosis
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that the diagnosis codes starting with O60. Exclude records that have diagnosis codes starting with O09.
+```{sql connection=con}
+
+SELECT admission_id
+FROM   admission_diagnosis
+WHERE  diag_code LIKE 'O60%'
+EXCEPT
+SELECT admission_id
+FROM   admission_diagnosis
+WHERE  diag_code LIKE 'O09%' 
+;
+
+```
+## Examination of single record - 21361916
+This admissions matches the PICQ indicator as it has an abortion diagnosis code without a duration of pregnancy diagnosis code.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code,
+       diag_short_desc
+FROM   admission_diagnosis
+       JOIN diagnosis_desc USING (diag_code)
+WHERE  admission_id = 21361916	
+;
+
+```

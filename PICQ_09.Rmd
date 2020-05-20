@@ -1,0 +1,101 @@
+---
+title: 'PICQ Indicator ID # 102037'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library("RPostgreSQL")
+
+# loads the PostgreSQL driver
+con <- dbConnect(dbDriver("PostgreSQL"), dbname = 'vaed_full',
+                 host = "himsql7.latrobe.edu.au", port = 5432,
+                 user = "dewollershei-test", password = 'healthGuru' )
+```
+# # 102037 - Cardiac ablation, open, of left atrium with Cardiac ablation, open, of right atrium
+This indicator identifies records containing the Cardiac ablation, open, of left atrium code with the Cardiac ablation, open, of right atrium code instead of the Cardiac ablation, open, of both atria code. These records would be correct if the procedure on the left atrium was performed at a different visit to theatre than the procedure on the right atrium.
+
+# Interpretation of indicator
+Identify records with both cardiac ablation open left atrium procedure code and cardiac ablation open right atrium procedure code.
+
+# Notes
+Entire indicator implemented. Final query returned zero records, therefore error checking was done to ensure query was correct. Difficulty level 3/10.
+
+# Codes
+| What                               | Table               | Field          | Code    |
+|------------------------------------|---------------------|----------------|---------|
+| Cardiac ablation open left atrium  | admission_procedure | procedure_code | 3828704 |
+| Cardiac ablation open right atrium | admission_procedure | procedure_code | 3828703 |
+
+# Steps
+1) Admissions WITH cardiac ablation open left atrium procedure.
+1) Admissions WITH cardiac ablation open right atrium procedure.
+1) FINAL: Admissions WITH cardiac ablation open left atrium AND cardiac ablation open right atrium procedures.
+1) ERROR CHECK: Admissions WITH cardiac ablation open left atrium OR cardiac ablation open right atrium procedures.
+
+## Admissions WITH cardiac ablation open left atrium procedure
+Select admission ID and procedure code from the admission procedure table. Only show records that have the procedure code 3828704.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code = '3828704' 
+;
+
+```
+## Admissions WITH cardiac ablation open right atrium procedure
+Select admission ID and procedure code from the admission procedure table. Only show records that have the procedure code 3828703.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code = '3828703' 
+;
+
+```
+## FINAL: Admissions WITH cardiac ablation open left atrium AND cardiac ablation open right atrium procedures
+Select admission ID and procedure code from the admission procedure table. Only show records that have procedure codes for both 3828704 and 3828703.
+
+Note: This query is working correctly as results are returned when one of the procedure codes are changed to a different but common procedure code e.g. 9555003. 
+```{sql connection=con}
+
+SELECT admission_id,
+       ap1.procedure_code,
+       ap2.procedure_code
+FROM   admission_procedure ap1
+       JOIN admission_procedure ap2 USING (admission_id)
+WHERE  ap1.procedure_code = '3828704'
+       AND ap2.procedure_code = '3828703' 
+;
+
+```
+## ERROR CHECK: Admissions WITH cardiac ablation open left atrium OR cardiac ablation open right atrium procedures
+Select all data from the admission procedure table where the procedure code is 3828703 or 3828704. 
+Note: This query returns the same number of results as step 1 and step 2.
+```{sql connection=con}
+
+SELECT *
+FROM   admission_procedure
+WHERE  procedure_code IN ( '3828703', '3828704' ) 
+;
+
+```
+## Examination of single record - 22330727
+No records were identified that matched the PICQ indicator that had both cardiac ablation open left atrium procedure code and cardiac ablation open right atrium procedure code. The record examined does not match the PICQ indicator as it has a procedure code for cardiac ablation open right atrium only.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code,
+       procedure_desc
+FROM   admission_procedure
+       JOIN procedure_desc USING (procedure_code)
+WHERE  admission_id = 22330727 
+;
+
+```

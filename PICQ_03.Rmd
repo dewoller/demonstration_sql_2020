@@ -1,0 +1,219 @@
+---
+title: 'PICQ Indicator ID # 102027'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library("RPostgreSQL")
+
+# loads the PostgreSQL driver
+con <- dbConnect(dbDriver("PostgreSQL"), dbname = 'vaed_full',
+                 host = "himsql7.latrobe.edu.au", port = 5432,
+                 user = "dewollershei-test", password = 'healthGuru' )
+```
+# # 102027 - Benign neoplasm of prostate
+This indicator identifies records containing the Hyperplasia of prostate code with a morphology code indicating a benign neoplasm of the prostate. From Sixth Edition of ICD-10-AM, the classification of benign prostate neoplasms, such as adenofibroma, adenoma, adenomyoma, fibroadenoma, fibroma and myoma, was altered from the Hyperplasia of prostate code to the Benign neoplasm of prostate code. These records may be correct if the morphology code relates to another condition.
+
+# Interpretation of indicator
+Identify records that have hyperplasia of prostate with a morphology code indicating a benign neoplasm of the prostate. 
+ADDITIONAL: To identify if these records (hyperplasia of prostate with a morphology code indicating a benign neoplasm of the prostate) are incorrect, also identify records that do not have another condition it may be related to i.e. other benign neoplasm diagnosis code.
+
+# Notes
+Entire indicator implemented. Difficulty level 5/10 for final query. Difficulty 9/10 for additional query. As there were no records returned that met the additional criteria, the additional final query was broken up to ensure that the query was working and correct.
+
+# Codes
+| What                                 | Table               | Field     | Code                                        |
+|--------------------------------------|---------------------|-----------|---------------------------------------------|
+| Hyperplasia of prostate diagnosis    | admission_diagnosis | diag_code | N40                                         |
+| Benign neoplasm morphology diagnosis | admission_diagnosis | diag_code | starts with M and 6th character ends with 0 |
+| Benign neoplasm diagnoses            | admission_diagnosis | diag_code | starts with D10 to D36                      |
+
+# Steps
+1) Admissions WITH hyperplasia of prostate diagnosis code.
+1) Admissions WITH benign neoplasm morphology code.
+1) FINAL: Admissions WITH hyperplasia of prostate diagnosis code AND benign neoplasm morphology code indicating benign neoplasm of the prostate.
+1) ADDITIONAL: Admissions WITH benign neoplasm diagnosis code.
+1) ADDITIONAL: Admissions WITH hyperplasia of prostate diagnosis code WITHOUT benign neoplasm diagnosis code.
+1) ADDITIONAL: Admissions WITH benign neoplasm morphology code WITHOUT benign neoplasm diagnosis code.
+1) ADDITIONAL FINAL: Admissions WITH hyperplasia of prostate diagnosis code AND benign neoplasm morphology code indicating benign neoplasm of the prostate WITHOUT benign neoplasm diagnosis code.
+1) ADDITIONAL FINAL ERROR CHECK: Admissions WITH hyperplasia of prostate diagnosis code AND benign neoplasm morphology code indicating benign neoplasm of the prostate WITH benign neoplasm diagnosis code
+1) FINAL ERROR CHECK: Admissions WITH hyperplasia of prostate diagnosis code AND benign neoplasm morphology code indicating benign neoplasm of the prostate.
+
+## Admissions WITH hyperplasia of prostate diagnosis code
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code N40.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code = 'N40' 
+;
+
+```
+## Admissions WITH benign neoplasm morphology code
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have morphology codes starting with M and 6th character 0.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code LIKE'M____0' 
+;
+
+```
+## FINAL: Admissions WITH hyperplasia of prostate diagnosis code AND benign neoplasm morphology code indicating benign neoplasm of the prostate
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have the diagnosis code N40 and morphology codes starting with M and 6th character 0.
+```{sql connection=con}
+
+SELECT admission_id,
+       ad1.diag_code,
+       ad2.diag_code
+FROM   admission_diagnosis ad1
+       JOIN admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code = 'N40'
+       AND ad2.diag_code LIKE'M____0' 
+;
+
+```
+## ADDITIONAL: Admissions WITH benign neoplasm diagnosis code
+Select admission ID and diagnosis code from the admission diagnosis table. Only show records that have diagnosis codes starting with D10 to D36.
+
+Note: Codes starting with D36 is specified as 'D3699' in the query to ensure that all records from D36 to D3699 are also included.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code
+FROM   admission_diagnosis
+WHERE  diag_code BETWEEN 'D10' AND 'D3699' 
+;
+
+```
+## ADDITIONAL: Admissions WITH hyperplasia of prostate diagnosis WITHOUT benign neoplasm diagnosis
+Selection admission ID from the diagnosis table. Only show records that have the diagnosis code N40, except records that have diagnosis codes starting with D10 to D36.
+```{sql connection=con}
+
+WITH n40
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code = 'N40'),
+     benign_neo
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code BETWEEN 'D10' AND 'D3699') 
+
+SELECT admission_id
+FROM   n40
+EXCEPT
+SELECT admission_id
+FROM   benign_neo
+;   
+
+```
+## ADDITIONAL: Admissions WITH benign neoplasm morphology code WITHOUT benign neoplasm diagnosis 
+Select admission ID from the admission diagnosis table. Only show records with the morphology codes starting with M and 6th character 0, except records that have diagnosis codes starting with D10 to D36.
+```{sql connection=con}
+
+WITH morph
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code LIKE'M____0'),
+     benign_neo
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code BETWEEN 'D10' AND 'D3699') 
+
+SELECT admission_id
+FROM   morph
+EXCEPT
+SELECT admission_id
+FROM   benign_neo
+;
+
+```
+## ADDITIONAL FINAL: Admissions WITH hyperplasia of prostate diagnosis code AND benign neoplasm morphology code indicating benign neoplasm of the prostate WITHOUT benign neoplasm diagnosis code
+Select admission ID from the admission diagnosis table. Only show records that have the diagnosis code N40 and morphology codes starting with M and 6th character 0, except records that have diagnosis codes starting with D10 to D36.
+```{sql connection=con}
+
+WITH n40
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code = 'N40'),
+     morph
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code LIKE'M____0'),
+     benign_neo
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code BETWEEN 'D10' AND 'D3699') 
+
+SELECT admission_id
+FROM   n40
+       JOIN morph USING (admission_id)
+EXCEPT
+SELECT admission_id
+FROM   benign_neo
+;
+
+```
+## ADDITIONAL FINAL ERROR CHECK: Admissions WITH hyperplasia of prostate diagnosis code AND benign neoplasm morphology code indicating benign neoplasm of the prostate WITH benign neoplasm diagnosis code
+Select admission ID from the admission diagnosis table. Only show records that have the diagnosis code N40 and morphology codes starting with M and 6th character 0, and also include records that have diagnosis codes starting with D10 to D36.
+
+Note: This query was the reverse of the previous (step 7) to ensure that the query was functioning correctly as zero results were returned in the previous.
+```{sql connection=con}
+
+WITH n40
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code = 'N40'),
+     morph
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code LIKE'M____0'),
+     benign_neo
+     AS (SELECT admission_id
+         FROM   admission_diagnosis
+         WHERE  diag_code BETWEEN 'D10' AND 'D3699') 
+
+SELECT admission_id
+FROM   n40
+       JOIN morph USING (admission_id)
+INTERSECT
+SELECT admission_id
+FROM   benign_neo  
+;
+
+```
+## FINAL ERROR CHECK: Admissions WITH hyperplasia of prostate diagnosis code AND benign neoplasm morphology code indicating benign neoplasm of the prostate.
+Select unique admission IDs from the admission diagnosis table. Only show records that have the diagnosis code N40 and morphology codes starting with M and 6th character 0.
+
+Note: It was noted in the previous query (step 8) that 37 records were returned as opposed to 38 in the final query. Both queries should return the same number of results since there are no admissions that do not have a diagnosis code between D10 and D3699. Therefore, DISTINCT was used in a repeat of the final query to verify that same number of results returned and both queries were functioning correctly. By only displaying the admission ID, both the final query and the previous error checking query return the same number of results (37).
+```{sql connection=con}
+
+SELECT DISTINCT admission_id
+FROM   admission_diagnosis ad1
+       JOIN admission_diagnosis ad2 USING (admission_id)
+WHERE  ad1.diag_code = 'N40'
+       AND ad2.diag_code LIKE'M____0'  
+;
+
+```
+## Examination of single record - 21005501
+This admission matches the PICQ indicator because it has a diagnosis code for hyperplasia of prostate and benign neoplasm morphology code. However, as the indicator mentions, this record may be correct as there is another condition (i.e. D303 benign neoplasm of bladder) that the morphology code may relate to.
+```{sql connection=con}
+
+SELECT admission_id,
+       diag_code,
+       diag_short_desc
+FROM   admission_diagnosis
+       JOIN diagnosis_desc USING (diag_code)
+WHERE  admission_id = 21005501
+;
+
+```
+

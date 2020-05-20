@@ -1,0 +1,88 @@
+---
+title: 'PICQ Indicator ID # 101974'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library("RPostgreSQL")
+
+# loads the PostgreSQL driver
+con <- dbConnect(dbDriver("PostgreSQL"), dbname = 'vaed_full',
+                 host = "himsql7.latrobe.edu.au", port = 5432,
+                 user = "dewollershei-test", password = 'healthGuru' )
+```
+# # 101974 - Repair of cystocele (anterior vaginal repair) code with repair of rectocele (posterior vaginal repair) code
+This indicator identifies records containing both a repair of cystocele (anterior vaginal repair) code and a repair of rectocele (posterior vaginal repair) code. ICD-10-AM provides one code for repair of both cystocele and rectocele.
+
+# Interpretation of indicator
+Identify admissions with both anterior vaginal repair procedure code and posterior vaginal repair procedure code in the one admission.
+
+# Notes
+Entire indicator implemented. Difficulty level 2/10.
+
+# Codes
+| What                                                          | Table               | Field          | Code    |
+|---------------------------------------------------------------|---------------------|----------------|---------|
+| Repair of cystocele (anterior vaginal repair)                 | admission_procedure | procedure_code | 3557000 |
+| Repair of rectocele (posterior vaginal repair) procedure code | admission_procedure | procedure_code | 3557100 |
+| What | Table | Field | Code |
+
+# Steps
+1) Admissions WITH anterior vaginal repair procedure.
+1) Admissions WITH posterior vaginal repair procedure.
+1) FINAL: Admissions WITH both anterior vaginal repair AND posterior vaginal repair procedures.
+
+## Admissions WITH anterior vaginal repair procedure
+Select admission ID and procedure code from the admission procedure table. Only show records that have the procedure code 3557000.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code = '3557000' 
+;
+
+```
+## Admissions WITH posterior vaginal repair procedure
+Select admission ID and procedure code from the admission procedure table. Only show records that have the procedure code 3557100.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code = '3557100' 
+;
+
+```
+## FINAL: Admissions WITH both anterior vaginal repair AND posterior vaginal repair procedures
+Select admission ID and procedure code from the admission procedure table. Only show records that have procedure codes for both 3557000 and 3557100.
+```{sql connection=con}
+
+SELECT admission_id,
+       ap1.procedure_code,
+       ap2.procedure_code
+FROM   admission_procedure ap1
+       JOIN admission_procedure ap2 USING (admission_id)
+WHERE  ap1.procedure_code = '3557000'
+       AND ap2.procedure_code = '3557100' 
+;
+
+```
+## Examination of single record - 21138547
+This admission matches the PICQ indicator because it has a repair of cystocele (anterior vaginal repair) procedure code and repair of rectocele (posterior vaginal repair) procedure code in the same admission/episode.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code,
+       procedure_desc
+FROM   admission_procedure
+       JOIN procedure_desc USING (procedure_code)
+WHERE  admission_id = 21138547 
+;
+
+```

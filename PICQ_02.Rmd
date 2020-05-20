@@ -1,0 +1,130 @@
+---
+title: 'PICQ Indicator ID # 102182'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library("RPostgreSQL")
+
+# loads the PostgreSQL driver
+con <- dbConnect(dbDriver("PostgreSQL"), dbname = 'vaed_full',
+                 host = "himsql7.latrobe.edu.au", port = 5432,
+                 user = "dewollershei-test", password = 'healthGuru' )
+```
+# # 102182 - Necklift procedure code with facelift procedure code
+This indicator identifies records containing the Necklift procedure code with a Facelift procedure code. The Includes note in the Tabular List of Interventions at the Facelift code and the Excludes note at the Necklift code instructs that where a necklift is performed with a facelift, only a facelift procedure code should be assigned.
+
+# Interpretation of indicator
+Identify records with both necklift procedure code and facelift procedure code.
+
+# Notes
+Entire indicator implemented. There are 3 records that contain a necklift procedure code and facelift bilateral procedure code, but no records that contain both a necklift procedure code and facelift unilateral procedure code. Difficulty level 3/10.
+
+# Codes
+| What                               | Table               | Field          | Code    |
+|------------------------------------|---------------------|----------------|---------|
+| Necklift procedure code            | admission_procedure | procedure_code | 4558802 |
+| Facelift bilateral procedure code  | admission_procedure | procedure_code | 4558800 |
+| Facelift unilateral procedure code | admission_procedure | procedure_code | 4558700 |
+
+# Steps
+1) Admissions WITH necklift procedure.
+1) Admissions WITH facelift bilateral procedure.
+1) Admissions WITH facelift unilateral procedure.
+1) Admissions WITH necklift procedure AND facelift bilateral procedure.
+1) Admissions WITH necklift procedure AND facelift unilateral procedure.
+1) FINAL: Admissions WITH necklift procedure AND facelift bilateral procedure OR facelift unilateral procedure.
+
+## Admissions WITH necklift procedure
+Select admission ID and procedure code from the admission procedure table. Only show records that have the procedure code 4558802.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code = '4558802' 
+; 
+
+```
+## Admissions WITH facelift bilateral procedure
+Select admission ID and procedure code from the admission procedure table. Only show records that have the procedure code 4558800.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code = '4558800' 
+; 
+
+```
+## Admissions WITH facelift unilateral procedure
+Select admission ID and procedure code from the admission procedure table. Only show records that have the procedure code 4558700.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code = '4558700' 
+;
+
+```
+## Admissions WITH necklift procedure AND facelift bilateral procedure
+Select admission ID and procedure code from the admission procedure table. Only show records that have procedure codes 4558802 and 4558800.
+```{sql connection=con}
+
+SELECT admission_id,
+       ap1.procedure_code,
+       ap2.procedure_code
+FROM   admission_procedure ap1
+       JOIN admission_procedure ap2 USING (admission_id)
+WHERE  ap1.procedure_code = '4558802'
+       AND ap2.procedure_code = '4558800' 
+;
+
+```
+## Admissions WITH necklift procedure AND facelift unilateral
+Select admission ID and procedure code from the admission procedure table. Only show records that have procedure codes for both 4558802 and 4558700.
+```{sql connection=con}
+
+SELECT admission_id,
+       ap1.procedure_code,
+       ap2.procedure_code
+FROM   admission_procedure ap1
+       JOIN admission_procedure ap2 USING (admission_id)
+WHERE  ap1.procedure_code = '4558802'
+       AND ap2.procedure_code = '4558700' 
+;
+
+```
+## FINAL: Admissions WITH necklift procedure AND facelift bilateral procedure OR facelift unilateral procedure
+Select admission ID and procedure code from the admission procedure table. Only show records that procedure codes for both 4558802 and 4558800, or 4558802 and 4558700.
+```{sql connection=con}
+
+SELECT admission_id,
+       ap1.procedure_code,
+       ap2.procedure_code
+FROM   admission_procedure ap1
+       JOIN admission_procedure ap2 USING (admission_id)
+WHERE  ap1.procedure_code IN ( '4558802' )
+       AND ap2.procedure_code IN ( '4558800', '4558700' ) 
+;
+
+```
+## Examination of single record - 21358594
+This record matches the PICQ indicator because it has both a facelift procedure code and necklift procedure code.
+```{sql connection=con}
+
+SELECT admission_id, 
+       procedure_code, 
+       procedure_desc 
+FROM   admission_procedure 
+       JOIN procedure_desc USING (procedure_code) 
+WHERE  admission_id = 21358594 
+;
+    
+```

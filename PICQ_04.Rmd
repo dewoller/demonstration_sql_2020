@@ -1,0 +1,251 @@
+---
+title: 'PICQ Indicator ID # 101958'
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(DBI)
+library("RPostgreSQL")
+
+# loads the PostgreSQL driver
+con <- dbConnect(dbDriver("PostgreSQL"), dbname = 'vaed_full',
+                 host = "himsql7.latrobe.edu.au", port = 5432,
+                 user = "dewollershei-test", password = 'healthGuru' )
+```
+# 101958 - Unusual route of administration of pharmacological agent with insulin code combination
+This indicator identifies records containing a clinically unusual route of administration of pharmacological agent with insulin administered codes. These records would be correct if an unusual route of administration of this substance was performed.
+
+# Interpretation of indicator
+Identify records that have insulin administered as a clinically unusual route of administration of pharmacological agent code i.e. any records with insulin administered except when administered by: intravenous, subcutaneous, or loading of drug delivery device (e.g. insulin pump). 
+
+# Notes
+Entire indicator implemented. Difficulty 8/10 as zero records were returned in the final query, which required implementation of error checking queries to ensure that there are zero records that meet the PICQ indicator criteria.
+
+# Codes
+| What                                                                   | Table               | Field          | Code                        |
+|------------------------------------------------------------------------|---------------------|----------------|-----------------------------|
+| Insulin administered procedure                                         | admission_procedure | procedure_code | procedure code extension 06 |
+| Insulin administered procedure                                         | procedure_desc      | block          | block 1920                  |
+| Administration pharmacotherapy intravenous procedure                   | admission_procedure | procedure_code | starts with 96199           |
+| Administration pharmacotherapy subcutaneous procedure                  | admission_procedure | procedure_code | starts with 96200           |
+| Administration pharmacotherapy loading drug delivery device procedure  | admission_procedure | procedure_code | starts with 96209           |
+
+# Steps
+1) Admissions WITH insulin administered procedure.
+1) Admissions WITHOUT administration of pharmacotherapy intravenous procedure.
+1) Admissions WITHOUT administration of pharmacotherapy subcutaneous procedure.
+1) Admissions WITHOUT administration of pharmacotherapy loading of drug delivery device procedure.
+1) FINAL: Admissions WITH insulin administered procedure WITHOUT administration of pharmacotherapy intravenous, subcutaneous OR loading of drug delivery device procedure.
+1) FINAL ALTERNATIVE: Admissions WITH insulin administered procedure WITHOUT administration of pharmacotherapy intravenous OR subcutaneous OR loading of drug delivery device procedure.
+1) ERROR CHECKING: Admissions WITH insulin administered procedure GROUPED BY procedure code.
+1) ERROR CHECKING: Admissions WITH insulin administered procedure WITHOUT administration of pharmacotherapy intravenous procedure.
+1) EROR CHECKING: Admissions WITH insulin administered procedure WITHOUT administration of pharmacotherapy subcutaneous procedure.
+1) ERROR CHECKING: Admissions WITH insulin administered procedure WITHOUT administration of pharmacotherapy loading of drug delivery device procedure.
+
+## Admissions WITH insulin administered procedure
+Selection admission ID and procedure code from the admission procedure table. Select block from the procedure_desc table. Only show records where the procedure code has the 6th character 0 and 7th character 6, and the block number is 1920.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code,
+       block
+FROM   admission_procedure
+       JOIN procedure_desc USING (procedure_code)
+WHERE  procedure_code LIKE '_____06'
+       AND block = '1920'
+;  
+
+```
+
+## Admissions WITHOUT administration of pharmacotherapy intravenous procedure
+Select admission ID and procedure code from the admission procedure table. Only show records without the procedure codes starting with 96199.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+EXCEPT
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code LIKE '96199%'  
+;
+
+```
+
+## Admissions WITHOUT administration of pharmacotherapy subcutaneous procedure.
+Select admission ID and procedure code from the admission procedure table. Only show records without the procedure codes starting with 96200.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+EXCEPT
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code LIKE '96200%' 
+;
+
+```
+## Admissions WITHOUT administration of pharmacotherapy loading of drug delivery device procedure
+Select admission ID and procedure code from the admission procedure table. Only show records without the procedure codes starting with 96209.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+EXCEPT
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code LIKE '96209%'
+;
+
+```
+## Admissions WITHOUT administration of pharmacotherapy intravenous procedure OR administration of pharmacotherapy subcutaneous procedure OR administration of pharmacotherapy loading of drug delivery device procedure
+Select admission ID and procedure code from the admission procedure table. Only show records without the procedure codes starting with 96199, 96200 or 96209.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+EXCEPT
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code LIKE '96199%'
+        OR procedure_code LIKE '96200%'
+        OR procedure_code LIKE '96209%'  
+;
+
+```
+## FINAL: Admissions WITH insulin administered procedure WITHOUT administration of pharmacotherapy intravenous OR subcutaneous OR loading of drug delivery device procedure
+Selection admission ID from the admission procedure table. Only show records where the procedure code has 6th character 0 and 7th character 6 and is in block 1920 from the procedure_desc table. Exclude admissions where the procedure code starts with 96199, 96200 or 96209.
+```{sql connection=con}
+
+SELECT admission_id
+FROM   admission_procedure
+       JOIN procedure_desc USING (procedure_code)
+WHERE  procedure_code LIKE '_____06'
+       AND block = '1920'
+EXCEPT
+SELECT admission_id
+FROM   admission_procedure
+WHERE  procedure_code LIKE '96199%'
+        OR procedure_code LIKE '96200%'
+        OR procedure_code LIKE '96209%'  
+;
+
+``` 
+# FINAL ALTERNATIVE: Admissions WITH insulin administered procedure WITHOUT administration of pharmacotherapy intravenous OR subcutaneous OR loading of drug delivery device procedure
+Selection admission ID from the admission procedure table. Only show records where the procedure code has 6th character 0 and 7th character 6 and is in block 1920 from the procedure desc table. Exclude admissions where the procedure code starts with 96199, 96200 or 96209.
+```{sql connection=con}
+
+SELECT admission_id
+FROM   admission_procedure
+       JOIN procedure_desc USING (procedure_code)
+WHERE  procedure_code LIKE '_____06'
+       AND block = '1920'
+EXCEPT
+SELECT admission_id
+FROM   admission_procedure
+WHERE  procedure_code IN ( '9619906', '9620006', '9620906' )  
+;
+
+```
+## ERROR CHECKING: Admissions WITH insulin administered procedure GROUPED BY procedure code
+Selection procedure code and block from the admission procedure and procedure_desc tables. Only show records where the procedure code has the 6th character 0 and 7th character 6, and is in block 1920. Group the results by procedure code and block.
+
+Note: Step 1 repeated but without the admission ID and grouped by procedure code and block to show that there are no records with an insulin administered code with a clinically unusual route of administration of pharmacological agent i.e. any other administration other than intravenous (96199), subcutaneous (96200) or loading of drug delivery device (96209).
+```{sql connection=con}
+
+SELECT procedure_code,
+       block
+FROM   admission_procedure
+       JOIN procedure_desc USING (procedure_code)
+WHERE  procedure_code LIKE '_____06'
+       AND block = '1920'
+GROUP  BY procedure_code,
+          block  
+;
+
+```
+## ERROR CHECKING: Admissions WITH insulin administered procedure WITHOUT administration of pharmacotherapy intravenous procedure
+Select admission ID and procedure code from the admission procedure table. Only show records where the procedure code has the 6th character 0 and 7th character 6 and is in block 1920 (from the procedure_desc table). Exclude records where the procedure code starts with 96199. Order the results by procedure code.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+       JOIN procedure_desc USING (procedure_code)
+WHERE  procedure_code LIKE '_____06'
+       AND block = '1920'
+EXCEPT
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code LIKE '96199%'
+ORDER  BY procedure_code  
+;
+
+```
+## EROR CHECKING: Admissions WITH insulin administered procedure WITHOUT administration of pharmacotherapy subcutaneous procedure
+Select admission ID and procedure code from the admission procedure table. Only show records where the procedure code has the 6th character 0 and 7th character 6 and is in block 1920 (from the procedure desc table). Exclude records where the procedure code starts with 96200. Order the results by procedure code.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+       JOIN procedure_desc USING (procedure_code)
+WHERE  procedure_code LIKE '_____06'
+       AND block = '1920'
+EXCEPT
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code LIKE '96200%'
+ORDER  BY procedure_code  
+;
+
+```
+## ERROR CHECKING: Admissions WITH insulin administered procedure WITHOUT administration of pharmacotherapy loading of drug delivery device procedure
+Select admission ID and procedure code from the admission procedure table. Only show records where the procedure code has the 6th character 0 and 7th character 6 and is in block 1920 (from the procedure desc table). Exclude records where the procedure code starts with 96209. Order the results by procedure code.
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+       JOIN procedure_desc USING (procedure_code)
+WHERE  procedure_code LIKE '_____06'
+       AND block = '1920'
+EXCEPT
+SELECT admission_id,
+       procedure_code
+FROM   admission_procedure
+WHERE  procedure_code LIKE '96209%'
+ORDER  BY procedure_code  
+;
+
+```
+## Examination of single record - 21384172
+Zero records match the PICQ indicator. For example, this admission (21384172) does not match the PICQ indicator because it has an insulin administered code, but the administration of pharmacological agent is not a clinically unusual route as it is intravenous administration of pharmacological agent insulin. 
+```{sql connection=con}
+
+SELECT admission_id,
+       procedure_code,
+       procedure_desc
+FROM   admission_procedure
+       JOIN procedure_desc USING (procedure_code)
+WHERE  admission_id = 21384172  
+;
+
+```
+
+
+
+
